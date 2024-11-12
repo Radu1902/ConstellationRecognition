@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing Interface</title>
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            font: normal 20px Verdana;
+        }
+        #image-display {
+            width: 250px;
+            padding: 20px;
+            background-color: #f0f0f0;
+            border-right: 1px solid #ccc;
+            text-align: center;
+        }
+        #toolbar {
+            width: 250px;
+            padding: 20px;
+            background-color: #f0f0f0;
+            border-right: 1px solid #ccc;
+        }
+        #content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .toolbar-item {
+            margin-bottom: 20px;
+        }
+        .image-container {
+            flex: 1 1 calc(50% - 10px);
+            box-sizing: border-box;
+        }
+        .image-container img {
+            max-width: 100%;
+        }
+    </style>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('http://localhost:8000/constellations')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('constellation-select');
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.text = item;
+                        select.add(option);
+                    });
+                });
+
+            fetch('http://localhost:8000/identifications')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('identification-mode');
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.text = item;
+                        select.add(option);
+                    });
+                });
+
+            fetch('http://localhost:8000/filters')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('filter-mode');
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.text = item;
+                        select.add(option);
+                    });
+                });
+        });
+
+        function validateKernel(input) {
+            const value = parseInt(input.value);
+            if (value <= 1 || value % 2 === 0) {
+                input.setCustomValidity('Kernel size must be an odd number greater than 1.');
+            } else {
+                input.setCustomValidity('');
+            }
+        }
+        function validateThreshold(input) {
+            const value = parseInt(input.value)
+            if (value < 0 || value > 255) {
+                input.setCustomValidity('threshold must be between 0 and 255');
+            } else {
+                input.setCustomValidity('');
+            }
+        }
+
+        function displayImage(event) {
+            const reader = new FileReader();
+            reader.onload = function(){
+                const output = document.getElementById('image-preview');
+                output.src = reader.result;
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+
+        async function uploadFormData(event) {
+            event.preventDefault();
+
+            const form = document.getElementById('upload-form');
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('http://localhost:8000/uploadimg', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                console.log('Success:', result);
+
+                await displayResults(result.file_id, result.constellation);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function displayResults(fileId, constellation) {
+            const identificationMode = document.getElementById('identification-mode').value;
+            const filterMode = document.getElementById('filter-mode').value;
+            const imageUrls = [];
+
+            if (filterMode === 'Mean filter' || filterMode === 'Gaussian filter') {
+                imageUrls.push(`http://localhost:8000/filtered?file_id=${fileId}`)
+            } 
+
+            if (identificationMode === 'Simple blob detector') {
+                imageUrls.push(`http://localhost:8000/blobs?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/output?file_id=${fileId}`);
+            } else if (identificationMode === 'Otsu thresholding') {
+                imageUrls.push(`http://localhost:8000/threshed?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/contour?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/blobs?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/output?file_id=${fileId}`);
+            } else if (identificationMode === 'Thresholding') {
+                imageUrls.push(`http://localhost:8000/threshed?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/contour?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/blobs?file_id=${fileId}`);
+                imageUrls.push(`http://localhost:8000/output?file_id=${fileId}`);
+            } 
+
+            console.log('Fetching images from URLs:', imageUrls);
+            const contentDiv = document.getElementById('content');
+            contentDiv.innerHTML = '';
+
+            const predDiv = document.getElementById('prediction');
+            predDiv.innerHTML = '';
+
+            const predictionLabel = document.createElement('label');
+            predictionLabel.textContent = 'Predicted constellation: ' + constellation;
+            predDiv.appendChild(predictionLabel);
+
+            // predictionLabel.textContent = 'Predicted constellation: ' + constellation;
+            // contentDiv.appendChild(predictionLabel);
+
+            for (const url of imageUrls) {
+                try {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = 'Error loading image';
+                    img.onload = function() {
+                        console.log(`Image loaded successfully from ${url}`);
+                    };
+                    img.onerror = function() {
+                        console.error(`Error loading image from ${url}`);
+                    };
+
+                    const imgContainer = document.createElement('div');
+                    imgContainer.className = 'image-container';
+                    imgContainer.appendChild(img);
+
+                    contentDiv.appendChild(imgContainer);
+                } catch (error) {
+                    console.error(`Error creating image element for ${url}:`, error);
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="image-display">
+        <h3>Image Preview</h3>
+        <img id="image-preview" src="" alt="Selected Image" style="max-width: 100%;">
+    </div>
+    <div id="toolbar">
+        <form id="upload-form" onsubmit="uploadFormData(event)">
+            <div class="toolbar-item">
+                <label for="image-upload">Upload Image:</label>
+                <input type="file" id="image-upload" name="file" accept="image/*" onchange="displayImage(event)">
+            </div>
+            <div class="toolbar-item">
+                <label for="constellation-select">Constellation Select:</label>
+                <select id="constellation-select" name="constellation"></select>
+            </div>
+            <div class="toolbar-item">
+                <label for="identification-mode">Identification Mode:</label>
+                <select id="identification-mode" name="identification_mode"></select>
+            </div>
+            <div class="toolbar-item">
+                <label for="threshold">Threshold:</label>
+                <input type="number" id="threshold" name="threshold" oninput="validateThreshold(this)">
+            </div>
+            <div class="toolbar-item">
+                <label for="filter-mode">Filter Mode:</label>
+                <select id="filter-mode" name="filter_mode"></select>
+            </div>
+            <div class="toolbar-item">
+                <label for="kernel-size">Kernel Size:</label>
+                <input type="number" id="kernel-size" name="ksize" oninput="validateKernel(this)">
+            </div>
+            <div class="toolbar-item">
+                <button type="submit">Upload</button>
+            </div>
+        </form>
+        <div id="prediction">
+        </div>
+    </div>
+    
+    <div id="content">
+        <!-- made a wrap panel pretty much -->
+    </div>
+</body>
+</html>
