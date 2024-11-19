@@ -6,3 +6,4 @@ Only a handful of constellations can be detected within images for now, the ones
 HOW DOES IT WORK????
 
 Well in the cases that it DOES, it means that within the image there are white dots detected by opencv's simple blob detector arranged in the shape of one of the constellations in the templates directory (so yes, only one constellation can be detected per image for now).
+Also, readme will be expanded upon in the future.
